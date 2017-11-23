@@ -35,8 +35,15 @@ const main = async (argv_) => {
   await checkForUpdates()
 
   const argv = mri(argv_, {
-    boolean: ['help', 'version'],
-    string: ['token', 'team'],
+    boolean: [
+      'help',
+      'version'
+    ],
+    string: [
+      'token',
+      'team',
+      'api'
+    ],
     alias: {
       help: 'h',
       version: 'v',
@@ -116,18 +123,6 @@ const main = async (argv_) => {
       )
       return
     }
-
-    try {
-      config = JSON.parse(config)
-    } catch (err) {
-      console.error(
-        error(
-          `An error occurred while trying to parse "${hp(NOW_CONFIG_PATH)}": ` +
-            err.message
-        )
-      )
-      return
-    }
   } else {
     const results = await getDefaultCfg()
 
@@ -179,49 +174,36 @@ const main = async (argv_) => {
       return
     }
 
-    try {
-      authConfig = JSON.parse(authConfig)
+    if (!Array.isArray(authConfig.credentials)) {
+      console.error(
+        error(
+          `The content of "${hp(NOW_AUTH_CONFIG_PATH)}" is invalid. ` +
+            'No `credentials` list found inside'
+        )
+      )
+      return
+    }
 
-      if (!Array.isArray(authConfig.credentials)) {
+    for (const [i, { provider }] of authConfig.credentials.entries()) {
+      if (null == provider) {
         console.error(
           error(
-            `The content of "${hp(NOW_AUTH_CONFIG_PATH)}" is invalid. ` +
-              'No `credentials` list found inside'
+            `Invalid credential found in "${hp(NOW_AUTH_CONFIG_PATH)}". ` +
+              `Missing \`provider\` key in entry with index ${i}`
           )
         )
         return
       }
 
-      for (const [i, { provider }] of authConfig.credentials.entries()) {
-        if (null == provider) {
-          console.error(
-            error(
-              `Invalid credential found in "${hp(NOW_AUTH_CONFIG_PATH)}". ` +
-                `Missing \`provider\` key in entry with index ${i}`
-            )
+      if (!(provider in providers)) {
+        console.error(
+          error(
+            `Invalid credential found in "${hp(NOW_AUTH_CONFIG_PATH)}". ` +
+              `Unknown provider "${provider}"`
           )
-          return
-        }
-
-        if (!(provider in providers)) {
-          console.error(
-            error(
-              `Invalid credential found in "${hp(NOW_AUTH_CONFIG_PATH)}". ` +
-                `Unknown provider "${provider}"`
-            )
-          )
-          return
-        }
-      }
-    } catch (err) {
-      console.error(
-        error(
-          `An error occurred while trying to parse "${hp(
-            NOW_AUTH_CONFIG_PATH
-          )}": ` + err.message
         )
-      )
-      return
+        return
+      }
     }
   } else {
     const results = await getDefaultAuthCfg()
@@ -250,7 +232,7 @@ const main = async (argv_) => {
   }
 
   // the context object to supply to the providers or the commands
-  const ctx = {
+  const ctx: Object = {
     config,
     authConfig,
     argv: argv_
@@ -361,6 +343,15 @@ const main = async (argv_) => {
     ctx.argv.push('-h')
   }
 
+  const { sh } = ctx.config
+  ctx.apiUrl = 'https://api.zeit.co'
+
+  if (argv.api && typeof argv.api === 'string') {
+    ctx.apiUrl = argv.api
+  } else if (sh && sh.api) {
+    ctx.apiUrl = sh.api
+  }
+
   // $FlowFixMe
   const { isTTY } = process.stdout
 
@@ -430,7 +421,7 @@ const main = async (argv_) => {
     }
 
     const user = await getUser({
-      apiUrl: 'https://api.zeit.co',
+      apiUrl: ctx.apiUrl,
       token
     })
 
@@ -508,11 +499,11 @@ const main = async (argv_) => {
   }
 
   try {
-    await provider[subcommand](ctx)
+    process.exit(await provider[subcommand](ctx))
   } catch (err) {
     console.error(
       error(
-        `An unexpected error occurred in provider ${subcommand}: ${err.stack}`
+        `An unexpected error occurred in ${subcommand}: ${err.stack}`
       )
     )
   }

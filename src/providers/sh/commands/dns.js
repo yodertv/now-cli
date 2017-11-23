@@ -57,7 +57,7 @@ const help = () => {
       )}
       ${chalk.cyan(`$ now dns add zeit.rocks '@' MX mail.zeit.rocks 10`)}
 
-  ${chalk.gray('–')} Add an SVR record
+  ${chalk.gray('–')} Add an SRV record
 
       ${chalk.cyan(
         '$ now dns add <DOMAIN> <NAME> SRV <PRIORITY> <WEIGHT> <PORT> <TARGET>'
@@ -84,7 +84,7 @@ const main = async ctx => {
   argv._ = argv._.slice(1)
 
   debug = argv.debug
-  apiUrl = argv.url || 'https://api.zeit.co'
+  apiUrl = ctx.apiUrl
   subcommand = argv._[0]
 
   if (argv.help || !subcommand) {
