@@ -10,6 +10,7 @@ const { existsSync } = require('fs-extra')
 const mkdirp = require('mkdirp-promise')
 const mri = require('mri')
 const fetch = require('node-fetch')
+const updateNotifier = require('@zeit/check-updates')
 
 // Utilities
 const error = require('./util/output/error')
@@ -21,9 +22,9 @@ const getDefaultAuthCfg = require('./get-default-auth-cfg')
 const hp = require('./util/humanize-path')
 const providers = require('./providers')
 const configFiles = require('./util/config-files')
-const checkForUpdates = require('./util/updates')
 const getUser = require('./util/get-user')
 const exit = require('./util/exit')
+const pkg = require('./util/pkg')
 
 const NOW_DIR = getNowDir()
 const NOW_CONFIG_PATH = configFiles.getConfigFilePath()
@@ -32,7 +33,7 @@ const NOW_AUTH_CONFIG_PATH = configFiles.getAuthConfigFilePath()
 const GLOBAL_COMMANDS = new Set(['help'])
 
 const main = async (argv_) => {
-  await checkForUpdates()
+  updateNotifier(pkg, 'Now CLI')
 
   const argv = mri(argv_, {
     boolean: [
@@ -358,6 +359,17 @@ const main = async (argv_) => {
     ctx.apiUrl = sh.api
   }
 
+  const localConfig = configFiles.readLocalConfig()
+
+  if (localConfig) {
+    if (localConfig.api) {
+      ctx.apiUrl = localConfig.api
+      delete localConfig.api
+    }
+
+    Object.assign(ctx.config, localConfig)
+  }
+
   // $FlowFixMe
   const { isTTY } = process.stdout
 
@@ -425,10 +437,22 @@ const main = async (argv_) => {
       ctx.authConfig.credentials[credentialsIndex] = obj
     }
 
-    const user = await getUser({
-      apiUrl: ctx.apiUrl,
-      token
-    })
+    let user
+
+    try {
+      user = await getUser({
+        apiUrl: ctx.apiUrl,
+        token
+      })
+    } catch (err) {
+      console.error(error(err))
+      await exit(1)
+    }
+
+    // Don't use team from config if `--token` was set
+    if (ctx.config.sh && ctx.config.sh.currentTeam) {
+      delete ctx.config.sh.currentTeam
+    }
 
     ctx.config.sh = Object.assign(ctx.config.sh || {}, { user })
   }

@@ -92,7 +92,7 @@ async function download() {
 
     try {
       const name = platformToName[platform]
-      const url = `https://cdn.zeit.co/releases/now-cli/${packageJSON.version}/${name}`
+      const url = `https://github.com/zeit/now-cli/releases/download/${packageJSON.version}/${name}.gz`
       const resp = await fetch(url, { compress: false })
 
       if (resp.status !== 200) {
@@ -100,11 +100,6 @@ async function download() {
       }
 
       const size = resp.headers.get('content-length')
-
-      if (!size) {
-        throw new Error('Not found (content-length is absent)')
-      }
-
       const ws = fs.createWriteStream(partial)
 
       await new Promise((resolve, reject) => {
@@ -114,7 +109,10 @@ async function download() {
           .on('error', reject)
           .on('data', chunk => {
             bytesRead += chunk.length
-            showProgress(100 * bytesRead / size)
+
+            if (size) {
+              showProgress(100 * bytesRead / size)
+            }
           })
 
         const gunzip = zlib.createGunzip()
